@@ -1,159 +1,125 @@
-# OpenAlgo Contribution — Issue #889
+## Cycle 2 — ExternalDNS Issue #5151
 
-**Project:** OpenAlgo
-**Issue:** [#889 — frontend: Improve empty state UI with icons and consistent pattern](https://github.com/marketcalls/openalgo/issues/889)
-**Upstream Repo:** [marketcalls/openalgo](https://github.com/marketcalls/openalgo)
-**Fork:** [kietcoderlor/openalgo](https://github.com/kietcoderlor/openalgo)
-**Branch:** [`fix-889-empty-state-ui`](https://github.com/kietcoderlor/openalgo/tree/fix-889-empty-state-ui)
-**Author:** kietcoderlor
+### Status
 
----
+Cycle 2 Phase I Complete. Starting Phase II: Reproduce & Plan.
 
-## Phase IV: Submit & Iterate
+### Selected Issue
 
-### Pull Request
+**Project:** ExternalDNS
+**Repository:** https://github.com/kubernetes-sigs/external-dns
+**Issue:** https://github.com/kubernetes-sigs/external-dns/issues/5151
+**Fork:** https://github.com/kietcoderlor/external-dns
+**Working Branch:** https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname
 
-**PR Link:**
-https://github.com/marketcalls/openalgo/pull/1565
+### Problem Summary
 
-**Status:**
-Awaiting maintainer review. The pull request has no conflicts with the base branch.
+I selected issue #5151, where ExternalDNS creates malformed DNS records when a `DNSEndpoint` `dnsName` contains dots in the hostname portion, such as `name-192.168.0.1.example.com`.
 
-### PR Summary
+The expected behavior is that ExternalDNS preserves the full DNS name. The reported behavior suggests that part of the name is split or transformed incorrectly, especially when TXT ownership records are created with a TXT suffix.
 
-This pull request improves and standardizes the empty-state UI on two OpenAlgo frontend pages:
+### Why I Chose This Issue
 
-* `frontend/src/pages/admin/MarketTimings.tsx`
-* `frontend/src/pages/Search.tsx`
+I chose this issue because it is a real bug in a widely used Kubernetes project and is more technical than my first contribution. It gives me practice with Go, Kubernetes-style resources, DNS record generation, provider behavior, and test-driven debugging.
 
-The change replaces plain-text or minimal empty/error states with structured UI patterns that match the existing reference pattern in `StrategyIndex.tsx`. The new empty states use contextual `lucide-react` icons, clear headings, descriptive text, and an optional CTA where appropriate.
-
-### What This PR Changes
-
-#### MarketTimings.tsx
-
-* Replaced plain-text “markets closed” messages with structured empty states.
-* Added the `CalendarOff` icon.
-* Added a clear `Markets Closed` heading.
-* Preserved the existing description text.
-* Updated both:
-
-  * Today’s market timings empty state.
-  * Checked date market timings empty state.
-
-#### Search.tsx
-
-* Replaced minimal table-cell empty/error text with structured states.
-* Added the `SearchX` icon for no search results.
-* Added the `AlertTriangle` icon for search errors.
-* Added clearer headings and helper descriptions.
-* Added a `New Search` CTA for the no-results state.
-
-### Scope
-
-This PR is intentionally small and frontend-only.
-
-No changes were made to:
-
-* Backend logic
-* Authentication
-* Broker connection flow
-* Routing
-* `Layout.tsx`
-* Search API behavior
-* Search pagination
-* Market Timings fetch/edit/save logic
+The issue includes a concrete example and expected behavior, which makes it possible to write a focused reproduction test instead of relying only on manual testing with Kubernetes and BIND.
 
 ---
 
-## Code Changes
+## Cycle 2 — Phase II: Reproduce & Plan
 
-| Item                                | Link                                                                                                 |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Branch                              | [fix-889-empty-state-ui](https://github.com/kietcoderlor/openalgo/tree/fix-889-empty-state-ui)       |
-| Issue                               | [marketcalls/openalgo#889](https://github.com/marketcalls/openalgo/issues/889)                       |
-| Pull Request                        | [marketcalls/openalgo#1565](https://github.com/marketcalls/openalgo/pull/1565)                       |
-| Commit 1 — UI fix                   | [7abded8d](https://github.com/kietcoderlor/openalgo/commit/7abded8df1c8a68d5f0ed1a833ae9c05c1d313ab) |
-| Commit 2 — dist/docs update         | [b0da0e02](https://github.com/kietcoderlor/openalgo/commit/b0da0e021572328f25cd952d4228474dc6996a79) |
-| Commit 3 — Merge upstream/main      | [8b1dfe24](https://github.com/kietcoderlor/openalgo/commit/8b1dfe24)                                 |
-| Commit 4 — Rebuild dist after merge | [039e90d2](https://github.com/kietcoderlor/openalgo/commit/039e90d2)                                 |
+### Investigation Summary
 
----
+I investigated the ExternalDNS code path for issue #5151 and found that the bug is unlikely to be in the `DNSEndpoint` CRD source. The CRD source appears to pass `dnsName` through unchanged.
 
-## Testing and Validation
+The most likely issue is in the TXT registry name mapper:
 
-### Automated Validation
+* `registry/mapper/mapper.go`
+* `AffixNameMapper.ToTXTName`
+* `AffixNameMapper.ToEndpointName`
 
-The frontend was validated with:
+The mapper currently splits DNS names using `strings.SplitN(dns, ".", 2)`. This works for normal hostnames, but it can break names where the hostname portion itself contains dots, such as `name-192.168.0.1.example.com`.
 
-* `npm run lint` — passed.
-* `npm run test:run` — passed, 48/48 tests.
-* `npm run build` — passed.
+### Relevant Files
 
-### Manual Validation
+#### DNSEndpoint / CRD source
 
-Full browser-based end-to-end validation was limited because OpenAlgo redirects logged-in users to `/broker` until a trading broker is connected. I do not have an Indian PAN/Zerodha trading account, so I could not complete broker OAuth.
+* `apis/v1alpha1/dnsendpoint.go`
+* `source/crd.go`
+* `source/crd_test.go`
 
-To validate the implementation, I used:
+#### Endpoint model and planning
 
-* Source-code review against the existing empty-state pattern in `StrategyIndex.tsx`.
-* Diff review to confirm the change is limited to the intended empty-state branches.
-* Build and test validation to confirm the frontend still compiles and existing tests pass.
+* `endpoint/endpoint.go`
+* `plan/plan.go`
+* `controller/controller.go`
 
-### Regression Checks
+#### TXT registry and name mapping
 
-Confirmed that the implementation does not change:
+* `registry/mapper/mapper.go`
+* `registry/mapper/mapper_test.go`
+* `registry/txt/registry.go`
+* `registry/txt/registry_test.go`
 
-* Search API behavior
-* Search pagination
-* Search table logic
-* Market Timings fetch logic
-* Market Timings edit/save logic
-* Authentication or broker routing
+#### RFC2136 provider
 
----
+* `provider/rfc2136/rfc2136.go`
+* `provider/rfc2136/rfc2136_test.go`
 
-## Maintainer Feedback / Review Status
+### Reproduction Plan
 
-Current status:
+I plan to reproduce the bug with targeted unit tests instead of setting up a full Kubernetes + BIND environment first.
 
-* Awaiting maintainer workflow approval and review.
-* `cubic-dev-ai Code Reviewer` checked the pull request and reported no issues.
-* `security/snyk` checks reported no vulnerabilities.
-* No merge conflicts with the base branch.
+Planned test cases:
 
-Next steps:
+1. Add a mapper test for a dotted DNS name:
 
-* Wait for maintainer review.
-* Respond to any requested changes.
-* Push follow-up commits if reviewers suggest improvements.
-* Keep the PR discussion professional and update this README if feedback is received.
+   * Input: `name-192.168.0.1.example.com`
+   * TXT suffix: `-txtSuffix`
+   * Expected TXT name: the suffix should apply to the full DNS name, not only the first segment before the first dot.
 
----
+2. Add a TXT registry regression test:
 
-## Challenges Faced
+   * Verify that TXT ownership records preserve dotted DNS names correctly.
 
-1. **Broker gate:** OpenAlgo requires an active broker connection before accessing main app routes. Since I do not have an Indian PAN/Zerodha account, I could not complete full E2E browser validation.
+3. Add or extend an RFC2136 provider test:
 
-2. **Local setup:** Backend setup required `.env` changes for `REDIRECT_URL` and `FLASK_DEBUG`. Frontend setup required running the Vite dev server separately.
+   * Verify that the DNS UPDATE message still contains the full FQDN.
 
-3. **Scope discipline:** I avoided committing any local-only authentication, broker, or layout workaround. The final PR stays focused on the two frontend files required by issue #889.
+4. Optionally add a CRD source test:
 
----
+   * Confirm that `source/crd.go` passes the dotted `dnsName` through unchanged.
 
-## Learnings and Reflections
+### Targeted Test Commands
 
-This contribution helped me practice the full open-source workflow: selecting a scoped issue, reproducing the problem, planning the fix, implementing a focused frontend change, validating the build, opening a pull request, and tracking review status.
+Initial targeted tests:
 
-The main lesson was that a good open-source contribution does not need to be large. A small, well-scoped change can still improve consistency, readability, and user experience if it follows the project’s existing design patterns and avoids unnecessary changes.
+```bash
+CGO_ENABLED=0 go test ./registry/mapper -run 'ToTXTName|ToEndpointName' -v
+CGO_ENABLED=0 go test ./registry/txt -run 'Suffix|GenerateTXT' -v
+CGO_ENABLED=0 go test ./source -run TestCRDSource -v
+CGO_ENABLED=0 go test ./provider/rfc2136 -run 'ApplyChanges|AddRecord' -v
+CGO_ENABLED=0 go test ./endpoint -run 'NewEndpoint' -v
+```
 
----
+### Implementation Plan
 
-## Progress Milestones
+1. Add a failing unit test in `registry/mapper/mapper_test.go` for dotted DNS names with TXT suffixes.
+2. Confirm the current behavior incorrectly splits the name at the first dot.
+3. Update `AffixNameMapper.ToTXTName` so suffixes are applied to the intended full DNS name behavior.
+4. Update `AffixNameMapper.ToEndpointName` if needed to keep TXT name round-tripping symmetric.
+5. Add or update TXT registry tests to cover the ownership record path.
+6. Add an RFC2136 regression test if needed to confirm the provider keeps the full FQDN.
+7. Run targeted tests before opening a PR.
+8. Keep the PR focused on mapper/registry behavior unless maintainers request provider-level changes.
 
-* [x] Phase I: Select and explore issue
-* [x] Phase II: Reproduce and plan
-* [x] Phase III: Build and validate implementation
-* [x] Phase IV: Submit pull request and document review status
+### Current Findings
 
-**Phase IV Status:** Complete — PR submitted and awaiting maintainer review.
+* CRD source does not appear to modify `dnsName`.
+* RFC2136 appears to build a full FQDN in the DNS UPDATE message.
+* The strongest root-cause candidate is TXT name mapping in `registry/mapper/mapper.go`.
+* Full BIND reproduction may not be necessary for the first fix if a focused unit test clearly reproduces the mapper behavior.
+
+### Phase II Status
+
+In progress. Repository is cloned in WSL, branch is created, and initial code investigation is complete.
