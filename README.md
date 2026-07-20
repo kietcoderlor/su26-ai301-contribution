@@ -1,8 +1,8 @@
-# Cycle 2 - ExternalDNS Issue #5151
+# Cycle 2 — ExternalDNS Issue #5151
 
 ## Status
 
-Cycle 2 Phase II Complete - Reproduce & Plan.
+Cycle 2 Phase II Complete — Reproduce & Plan.
 
 ## Selected Issue
 
@@ -22,15 +22,7 @@ I selected issue #5151, where ExternalDNS creates malformed DNS records when a `
 name-192.168.0.1.example.com
 ```
 
-The expected behavior is that ExternalDNS preserves the full DNS name. The reported behavior suggests that part of the name is split or transformed incorrectly, especially when TXT ownership records are created with a TXT suffix.
-
----
-
-## Why I Chose This Issue
-
-I chose this issue because it is a real bug in a widely used Kubernetes project and is more technical than my first contribution. It gives me practice with Go, Kubernetes-style resources, DNS record generation, provider behavior, and test-driven debugging.
-
-The issue includes a concrete example and expected behavior, which makes it possible to write a focused reproduction test instead of relying only on manual testing with Kubernetes and BIND.
+The expected behavior is that ExternalDNS preserves the full dotted DNS name. The reported behavior suggests that the name is split incorrectly when TXT ownership records are generated with a TXT suffix.
 
 ---
 
@@ -38,7 +30,7 @@ The issue includes a concrete example and expected behavior, which makes it poss
 
 ## Environment Setup
 
-I set up the project locally using WSL Ubuntu and Cursor.
+I set up the project locally using **Windows + WSL Ubuntu + Cursor**.
 
 **Environment:**
 
@@ -49,15 +41,33 @@ I set up the project locally using WSL Ubuntu and Cursor.
 * Upstream: https://github.com/kubernetes-sigs/external-dns
 * Editor: Cursor
 
-**Setup completed:**
+**Setup path used:**
+
+I followed the normal open-source setup path for a Go repository: fork the upstream project, clone the fork in WSL, add the upstream remote, create a working branch, inspect the relevant packages, and run targeted Go tests.
+
+**Setup steps completed:**
 
 1. Forked `kubernetes-sigs/external-dns`.
-2. Cloned my fork into WSL.
+2. Cloned my fork into WSL at `~/codepath/external-dns`.
 3. Added the upstream remote.
 4. Created the working branch `fix-5151-dotted-dnsname`.
-5. Opened the project in Cursor.
-6. Inspected the DNSEndpoint, TXT registry, and RFC2136 provider code paths.
+5. Opened the repository in Cursor using the WSL environment.
+6. Inspected the DNSEndpoint, TXT registry, mapper, and RFC2136 provider code paths.
 7. Added a targeted failing regression test in `registry/mapper/mapper_test.go`.
+
+**Setup challenges and how I resolved them:**
+
+1. **Windows vs. Linux commands:**
+   I initially tried to run Linux commands such as `sudo apt update` inside Windows PowerShell, which failed because `sudo` is only available inside WSL. I resolved this by entering Ubuntu/WSL first, then running the Linux setup commands there.
+
+2. **Clone/network issue:**
+   The first clone attempt failed with an RPC / early EOF error. I resolved this by removing the incomplete clone and cloning again from inside WSL.
+
+3. **GitHub push authentication:**
+   Pushing with a GitHub password failed because GitHub no longer supports password authentication for Git operations. I resolved this by using GitHub authentication through `gh auth login` / Git credential setup, then pushed the branch to my fork.
+
+4. **Go toolchain:**
+   The repository uses Go modules and requires a newer Go toolchain than the default Ubuntu package may provide. I checked `go.mod`, confirmed the required Go version, and used targeted tests instead of running the entire test suite immediately.
 
 ---
 
@@ -67,25 +77,9 @@ https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname
 
 ---
 
-## Investigation Summary
+## Reproduction Process
 
-I investigated the ExternalDNS code path for issue #5151 and found that the bug is unlikely to be in the `DNSEndpoint` CRD source. The CRD source appears to pass `dnsName` through unchanged.
-
-The strongest root-cause candidate is the TXT registry name mapper:
-
-```text
-registry/mapper/mapper.go
-```
-
-Specifically, `AffixNameMapper.ToTXTName` uses `strings.SplitN(dns, ".", 2)`. This splits the DNS name at the first dot, which breaks names where the hostname portion itself contains dots, such as:
-
-```text
-name-192.168.0.1.example.com
-```
-
----
-
-## Steps to Reproduce
+### Steps to Reproduce
 
 1. Open the mapper implementation:
 
@@ -95,19 +89,19 @@ registry/mapper/mapper.go
 
 2. Inspect `AffixNameMapper.ToTXTName`.
 
-3. Observe that the function splits DNS names using:
+3. Notice that the function splits DNS names using:
 
 ```go
 strings.SplitN(dns, ".", 2)
 ```
 
-4. Add a regression test in:
+4. Open the mapper test file:
 
 ```text
 registry/mapper/mapper_test.go
 ```
 
-5. Use this test input:
+5. Add a regression test case to `TestAffixNameMapper_ToTXTName` with this input:
 
 ```text
 DNS name: name-192.168.0.1.example.com
@@ -121,38 +115,98 @@ Record type: A
 CGO_ENABLED=0 go test ./registry/mapper -run TestAffixNameMapper_ToTXTName -v
 ```
 
-7. The new regression test fails on the current implementation.
+7. Observe that the new regression test fails on the current implementation.
 
 ---
 
-## Reproduction Evidence
+## Expected Behavior
 
-The failing test shows that the current implementation applies the TXT suffix too early.
+When a DNS name contains dots in the hostname portion, the TXT ownership mapper should preserve the full DNS name and apply the TXT suffix to the intended full name.
 
-**Expected:**
+For this input:
+
+```text
+DNS name: name-192.168.0.1.example.com
+TXT suffix: -txtSuffix
+```
+
+The expected TXT record name is:
 
 ```text
 name-192.168.0.1.example.com-txtsuffix
 ```
 
-**Actual:**
-
-```text
-name-192-txtsuffix.168.0.1.example.com
-```
-
-This confirms that `AffixNameMapper.ToTXTName` currently splits the DNS name at the first dot and applies the TXT suffix to only the first label. This reproduces the malformed TXT ownership record behavior described in issue #5151.
+This means the dotted DNS name is preserved before the TXT suffix is applied.
 
 ---
 
-## Relevant Files
+## Actual Behavior
 
-### Primary files
+The current implementation splits the DNS name at the first dot and applies the TXT suffix after only the first label.
+
+The failing test produced:
+
+```diff
+Expected:
+name-192.168.0.1.example.com-txtsuffix
+
+Actual:
+name-192-txtsuffix.168.0.1.example.com
+```
+
+This confirms that `AffixNameMapper.ToTXTName` applies the suffix too early. Instead of preserving `name-192.168.0.1.example.com`, it treats `name-192` as the first part and `168.0.1.example.com` as the remaining domain.
+
+This reproduces the malformed TXT ownership record behavior described in ExternalDNS issue #5151.
+
+---
+
+## Reproduction Evidence
+
+I added a targeted failing regression test in:
+
+```text
+registry/mapper/mapper_test.go
+```
+
+The failing test case is named:
+
+```text
+suffix with dotted hostname (#5151)
+```
+
+The test command was:
+
+```bash
+CGO_ENABLED=0 go test ./registry/mapper -run TestAffixNameMapper_ToTXTName -v
+```
+
+The failure shows the exact mismatch between expected and actual TXT record name:
+
+```diff
+-name-192.168.0.1.example.com-txtsuffix
++name-192-txtsuffix.168.0.1.example.com
+```
+
+This gives a repeatable, source-level reproduction without needing a full Kubernetes + BIND environment.
+
+---
+
+## Specific Files and Functions Involved
+
+### Primary root-cause candidate
 
 * `registry/mapper/mapper.go`
+
+  * `AffixNameMapper.ToTXTName`
+  * `AffixNameMapper.ToEndpointName`
+
+### Test file
+
 * `registry/mapper/mapper_test.go`
 
-### Related files
+  * `TestAffixNameMapper_ToTXTName`
+
+### Related files investigated
 
 * `registry/txt/registry.go`
 * `registry/txt/registry_test.go`
@@ -164,11 +218,31 @@ This confirms that `AffixNameMapper.ToTXTName` currently splits the DNS name at 
 
 ---
 
+## Investigation Depth
+
+To avoid guessing, I inspected the code path from the reported resource to DNS record generation:
+
+1. **DNSEndpoint CRD source:**
+   `source/crd.go` appears to pass `dnsName` through unchanged, so the CRD source is unlikely to be the root cause.
+
+2. **Endpoint model:**
+   `endpoint/endpoint.go` stores the full `DNSName` and does not appear to truncate the dotted name during endpoint creation.
+
+3. **TXT registry mapper:**
+   `registry/mapper/mapper.go` is the strongest root-cause candidate because `ToTXTName` uses `strings.SplitN(dns, ".", 2)`, which explains why a dotted hostname gets split after `name-192`.
+
+4. **RFC2136 provider:**
+   `provider/rfc2136/rfc2136.go` is relevant to the reported provider path, but the current strongest reproduction is in the TXT mapper. RFC2136 should be tested later as a regression guard to confirm full FQDN behavior.
+
+This investigation found a concrete "match" example in the codebase: the existing mapper tests already cover TXT prefix/suffix behavior, but they do not cover dotted hostname cases. I added the dotted hostname case in the same test style.
+
+---
+
 ## Solution Approach
 
 ### Understand
 
-ExternalDNS creates malformed TXT ownership record names when a DNS name contains dots in the hostname portion. The current TXT mapper treats everything before the first dot as the host label and everything after it as the domain, which breaks names like:
+ExternalDNS creates malformed TXT ownership record names when a DNS name contains dots in the hostname portion. The current TXT mapper treats everything before the first dot as the host label and everything after it as the domain. This breaks names like:
 
 ```text
 name-192.168.0.1.example.com
@@ -176,7 +250,13 @@ name-192.168.0.1.example.com
 
 ### Match
 
-The existing mapper tests in `registry/mapper/mapper_test.go` already cover normal TXT prefix/suffix behavior. However, they do not cover dotted hostname cases. I added a failing regression test that follows the existing test style and captures this missing edge case.
+The relevant existing pattern is in:
+
+```text
+registry/mapper/mapper_test.go
+```
+
+Existing tests already cover normal TXT prefix and suffix behavior. My reproduction adds a missing edge case to the same test table: a DNS name with a dotted hostname portion.
 
 ### Plan
 
@@ -184,12 +264,13 @@ The existing mapper tests in `registry/mapper/mapper_test.go` already cover norm
 2. Update `AffixNameMapper.ToTXTName` in `registry/mapper/mapper.go` so TXT suffixes are applied without incorrectly splitting the DNS name at the first dot.
 3. Check whether `AffixNameMapper.ToEndpointName` also needs to be updated for symmetric round-trip behavior.
 4. Add or update TXT registry tests in `registry/txt/registry_test.go` if needed.
-5. Run targeted tests:
+5. Optionally add an RFC2136 provider regression test in `provider/rfc2136/rfc2136_test.go` to confirm the full FQDN is preserved.
+6. Run targeted tests:
 
    * `go test ./registry/mapper`
    * `go test ./registry/txt`
    * `go test ./provider/rfc2136`
-6. Keep the PR focused on mapper / TXT registry behavior unless maintainers request provider-level changes.
+7. Keep the PR focused on mapper / TXT registry behavior unless maintainers request provider-level changes.
 
 ### Implement
 
@@ -222,10 +303,11 @@ The fix will be considered successful when:
 Phase II Complete.
 
 * [x] Repository set up in WSL.
-* [x] Working branch created.
+* [x] Working branch created and linked.
 * [x] Code path investigated.
-* [x] Likely root cause identified in `registry/mapper/mapper.go`.
+* [x] Root-cause hypothesis identified in `registry/mapper/mapper.go`.
 * [x] Failing regression test added in `registry/mapper/mapper_test.go`.
+* [x] Expected vs. actual behavior documented clearly.
 * [x] Reproduction steps documented.
 * [x] Implementation plan documented.
 * [ ] Fix implementation will happen in Phase III.
