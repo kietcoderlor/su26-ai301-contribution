@@ -1,132 +1,97 @@
-# Cycle 2 — Phase III: Build Progress
+# Week 8 Update — ExternalDNS Pivot Decision
 
 ## Status
 
-Cycle 2 Phase III In Progress — implementation paused pending maintainer clarification.
+Cycle 2 ExternalDNS issue paused. I am switching to a backup issue after Phase III investigation and mentor feedback.
 
 ## Issue
 
-**Project:** ExternalDNS
-**Issue:** https://github.com/kubernetes-sigs/external-dns/issues/5151
-**Fork:** https://github.com/kietcoderlor/external-dns
-**Branch:** https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname
+**Project:** ExternalDNS  
+**Issue:** https://github.com/kubernetes-sigs/external-dns/issues/5151  
+**Fork:** https://github.com/kietcoderlor/external-dns  
+**Branch:** https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname  
 
 ---
 
-## Implementation Progress
+## What I Worked On This Week
 
-In Phase II, I added a targeted failing regression test for a dotted DNS name with a TXT suffix.
+This week, I reviewed the Phase III blocker for ExternalDNS issue #5151 and asked for mentor/peer feedback in CodePath Slack.
 
-Test input:
+In Phase II / early Phase III, I added a local failing regression test for a dotted DNS name case involving `--txt-suffix`.
+
+The reported current behavior creates a TXT record like:
 
 ```text
-DNS name: name-192.168.0.1.example.com
-TXT suffix: -txtSuffix
-Record type: A
+name-192-txtSuffix.168.0.1.example.com
 ```
 
-The test expected:
+The issue reporter expected a TXT record like:
 
 ```text
-name-192.168.0.1.example.com-txtsuffix
+name-192.168.0.1.example.com-txtSuffix
 ```
 
-The current mapper produced:
-
-```text
-a-name-192-txtsuffix.168.0.1.example.com
-```
-
-This confirmed that the current TXT mapper applies the suffix after the first DNS label instead of applying it to the full dotted name.
+My regression test was based on the reporter's expected behavior. However, after reviewing the existing mapper implementation, tests, and documentation, I found that the current ExternalDNS behavior appears to apply `--txt-suffix` to the first DNS label / host portion rather than the full FQDN.
 
 ---
 
-## Current Blocker
+## Blocker / Scope Finding
 
-During Phase III, I reviewed the existing mapper tests and documentation before changing production code. I found that my Phase II expected behavior may conflict with the current `--txt-suffix` semantics in ExternalDNS.
+The main blocker is that the reporter's expected behavior may conflict with existing `--txt-suffix` semantics in ExternalDNS.
 
-Current behavior appears to treat `--txt-suffix` as applying to the host portion / first DNS label. Existing tests seem to encode this behavior. Changing `AffixNameMapper.ToTXTName` to append the suffix to the full FQDN may break existing mapper tests and documented behavior.
+Changing `AffixNameMapper.ToTXTName` to append the suffix to the full FQDN would likely require a broader design decision from maintainers and could break existing mapper tests and documented behavior.
 
-Because of this, I paused implementation instead of changing `registry/mapper/mapper.go` immediately.
-
----
-
-## Code Changes So Far
-
-| Item                             | Link                                                                                  |
-| -------------------------------- | -------------------------------------------------------------------------             |
-| Branch                           | https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname             |
-| Issue                            | https://github.com/kubernetes-sigs/external-dns/issues/5151                           |
-| Reproduction test commit         | (https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname)           |
-| Maintainer clarification comment | (https://github.com/kubernetes-sigs/external-dns/issues/5151#issuecomment-5018310108) |
-
-Files involved:
-
-* `registry/mapper/mapper.go`
-* `registry/mapper/mapper_test.go`
-
-No production code fix has been committed yet because the intended `--txt-suffix` behavior needs maintainer clarification.
+Because of this, I paused production code changes instead of forcing a fix that might not match the project's intended behavior.
 
 ---
 
-## Testing Strategy
+## Mentor / Peer Feedback
 
-I ran the targeted mapper test:
+I asked for feedback in CodePath Slack. The feedback was that this issue may not be a good candidate to complete because:
 
-```bash
-CGO_ENABLED=0 go test ./registry/mapper -run TestAffixNameMapper_ToTXTName -v
-```
+1. The reporter's expected behavior appears to conflict with current mapper semantics.
+2. The behavior may involve DNS semantics beyond a small bug fix.
+3. The maintainer discussion suggests that this issue may no longer be intended for outside contribution.
 
-Result:
-
-* Existing mapper suffix/prefix cases pass.
-* The new dotted hostname regression test fails.
-* The failure demonstrates a behavior mismatch, but the intended expected behavior needs maintainer confirmation.
-
-I also checked mapper round-trip behavior and found that existing `TestToEndpointNameNewTXT` cases pass. This suggests the current prefix/suffix mapper behavior is internally consistent, which is why changing it without maintainer guidance could be risky.
+Based on this feedback, I decided to pivot away from ExternalDNS #5151 and switch to a backup issue.
 
 ---
 
-## Maintainer Clarification Needed
+## Artifacts
 
-I am asking maintainers to clarify which behavior is intended when `--txt-suffix` is used with a `dnsName` containing dotted hostname segments:
-
-1. Keep the current first-label suffix behavior.
-2. Append the suffix to the full FQDN.
-3. Apply the suffix to the zone-relative name, which may require zone/domain context in the mapper.
-
-Once maintainers clarify the expected behavior, I will update the test and implementation plan accordingly.
+| Item | Link |
+|---|---|
+| ExternalDNS issue | https://github.com/kubernetes-sigs/external-dns/issues/5151 |
+| Working branch | https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname |
+| Reproduction test commit | https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname |
+| Contribution README | https://github.com/kietcoderlor/su26-ai301-contribution |
 
 ---
 
-## Challenges Faced
+## What I Learned
 
-1. The original Phase II plan assumed that the suffix should be appended to the full DNS name.
-2. Phase III investigation showed that this assumption may conflict with existing ExternalDNS mapper tests and documentation.
-3. The issue may require a product/design clarification before a safe code change can be made.
-4. I paused implementation to avoid introducing a breaking change.
+- How to trace a reported open-source bug into the relevant code path.
+- How to write a targeted regression test for a suspected behavior mismatch.
+- How to compare a reporter's expected behavior against existing tests and documentation.
+- How to recognize when an issue requires maintainer/product clarification instead of a quick code change.
+- How to make a responsible open-source decision to pivot when an issue is no longer a good fit.
 
 ---
 
 ## Next Steps
 
-1. Post or track the maintainer clarification comment on issue #5151.
-2. Wait for maintainer guidance on the intended `--txt-suffix` semantics.
-3. Adjust the failing test expectation if needed.
-4. Implement the smallest safe fix once the intended behavior is confirmed.
-5. Run targeted mapper and TXT registry tests.
-6. Continue toward a Phase IV PR if the maintainers confirm the desired behavior.
+1. Stop active work on ExternalDNS #5151.
+2. Select a backup issue for the remaining weeks.
+3. Start the new issue from Phase I / Phase II.
+4. Focus on an issue with clearer scope, clearer expected behavior, and a realistic path to a PR.
 
----
+## Week 8 Status
 
-## Phase III Progress Checklist
+Week 8 progress submitted.
 
-* [x] Failing regression test added.
-* [x] Existing mapper tests reviewed.
-* [x] Potential semantics conflict identified.
-* [x] Implementation paused to avoid breaking existing behavior.
-* [x] Maintainer clarification comment drafted.
-* [ ] Maintainer clarification received.
-* [ ] Production fix implemented.
-* [ ] Targeted tests passing.
-* [ ] PR opened.
+- [x] ExternalDNS investigation documented.
+- [x] Blocker explained clearly.
+- [x] Mentor / peer feedback incorporated.
+- [x] Pivot decision documented.
+- [ ] Backup issue selected.
+- [ ] New issue Phase I / Phase II started.
