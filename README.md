@@ -1,97 +1,253 @@
-# Week 8 Update — ExternalDNS Pivot Decision
+# Cycle 3 — Rafter CLI Issue #35
 
-## Status
+## Phase I: Issue Selection
 
-Cycle 2 ExternalDNS issue paused. I am switching to a backup issue after Phase III investigation and mentor feedback.
+### Status
 
-## Issue
+Phase I Complete — selected a new Cycle 3 issue after pivoting away from ExternalDNS #5151.
 
-**Project:** ExternalDNS  
-**Issue:** https://github.com/kubernetes-sigs/external-dns/issues/5151  
-**Fork:** https://github.com/kietcoderlor/external-dns  
-**Branch:** https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname  
+### Selected Issue
+
+**Project:** Rafter CLI  
+**Repository:** https://github.com/RafterSecurity/rafter-cli  
+**Issue:** https://github.com/RafterSecurity/rafter-cli/issues/35  
+**Issue Title:** ci: add stale issue/PR cleanup workflow  
+**Fork:** https://github.com/kietcoderlor/rafter-cli  
+**Working Branch:** https://github.com/kietcoderlor/rafter-cli/tree/fix-35-stale-workflow  
+
+### Why I Chose This Issue
+
+I selected this issue as my Cycle 3 issue because it has a small and clear scope. The issue asks for a GitHub Actions workflow that automatically marks inactive issues and pull requests as stale and eventually closes stale issues.
+
+This issue is a better fit for the remaining weeks than my previous ExternalDNS issue because it has a concrete deliverable, a specified file to create, and clear configuration requirements. It is labeled as a good first issue, has no assignee, and had no linked branch or pull request when I selected it.
+
+### Issue Claim
+
+I commented on the GitHub issue to express interest in working on it for CodePath AI301.
+
+I also marked/commented on the course Google Sheet row so other students know I am working on this issue.
 
 ---
 
-## What I Worked On This Week
+## Phase II: Reproduce & Plan
 
-This week, I reviewed the Phase III blocker for ExternalDNS issue #5151 and asked for mentor/peer feedback in CodePath Slack.
+### Status
 
-In Phase II / early Phase III, I added a local failing regression test for a dotted DNS name case involving `--txt-suffix`.
+Phase II Complete — local setup completed, issue verified, and solution plan drafted.
 
-The reported current behavior creates a TXT record like:
+### Environment Setup
 
-```text
-name-192-txtSuffix.168.0.1.example.com
+I set up the repository locally using Windows and Antigravity.
+
+**Environment:**
+
+- OS: Windows
+- Editor: Antigravity
+- Local path: `D:\codepath\rafter-cli`
+- Fork: https://github.com/kietcoderlor/rafter-cli
+- Branch: `fix-35-stale-workflow`
+- Upstream: https://github.com/RafterSecurity/rafter-cli
+
+**Setup commands used:**
+
+```bash
+cd D:\codepath
+git clone https://github.com/kietcoderlor/rafter-cli.git
+cd rafter-cli
+git remote add upstream https://github.com/RafterSecurity/rafter-cli.git
+git checkout -b fix-35-stale-workflow
 ```
 
-The issue reporter expected a TXT record like:
+### Reproduction / Verification Process
 
-```text
-name-192.168.0.1.example.com-txtSuffix
+This issue is not a runtime bug. It is a missing repository automation workflow.
+
+To verify the current state, I inspected the `.github/workflows` directory and checked whether the requested stale workflow already exists.
+
+Commands used:
+
+```powershell
+cd D:\codepath\rafter-cli
+dir .github
+dir .github\workflows
+Test-Path .github\workflows\stale.yml
 ```
 
-My regression test was based on the reporter's expected behavior. However, after reviewing the existing mapper implementation, tests, and documentation, I found that the current ExternalDNS behavior appears to apply `--txt-suffix` to the first DNS label / host portion rather than the full FQDN.
+### Current Behavior
+
+The repository does not currently have the requested workflow file:
+
+```text
+.github/workflows/stale.yml
+```
+
+Existing workflow files found in `.github/workflows`:
+
+```text
+publish.yaml
+test-action.yml
+test-comprehensive.yml
+test-github-action.yml
+validate-release.yml
+```
+
+Because the stale workflow is missing, inactive issues and pull requests are not automatically labeled as stale according to the policy described in issue #35.
+
+### Expected Behavior
+
+The repository should have a GitHub Actions workflow at:
+
+```text
+.github/workflows/stale.yml
+```
+
+The workflow should use:
+
+```text
+actions/stale@v9
+```
+
+Expected behavior from issue #35:
+
+- Issues with no activity for 60 days get labeled `stale`.
+- Stale issues with no activity for 14 more days get closed.
+- Pull requests with no activity for 30 days get labeled `stale`.
+- Issues or PRs labeled `pinned` or `security` are exempt.
+- The `stale` label is removed when there is new activity.
+
+### Files to Modify
+
+Planned file to create:
+
+```text
+.github/workflows/stale.yml
+```
+
+### Repository Conventions Observed
+
+The existing workflows use clear descriptive names and standard GitHub Actions structure.
+
+Patterns observed:
+
+- Workflow names are descriptive, such as `Test Composite Action`.
+- Workflows use explicit triggers such as `push`, `pull_request`, and `workflow_dispatch`.
+- Jobs run on `ubuntu-latest`.
+- Existing workflow files mostly use the `.yml` extension, and the issue specifically requests `stale.yml`.
+
+### Solution Plan
+
+1. Create `.github/workflows/stale.yml`.
+2. Configure it to run on a daily `schedule`.
+3. Add `workflow_dispatch` so maintainers can run it manually.
+4. Use `actions/stale@v9`.
+5. Set issue stale timing:
+   - `days-before-issue-stale: 60`
+   - `days-before-issue-close: 14`
+6. Set PR stale timing:
+   - `days-before-pr-stale: 30`
+7. Exempt items labeled:
+   - `pinned`
+   - `security`
+8. Configure the workflow so the `stale` label is removed when new activity occurs.
+9. Verify YAML syntax and keep the PR focused only on the workflow file.
+
+### Implementation Note for Phase III
+
+The issue clearly requests stale labeling for PRs after 30 days, but it does not explicitly say that stale PRs should also be closed after 14 more days. For this reason, I avoided adding PR auto-close behavior during implementation.
+
+### Phase II Checklist
+
+- [x] Repository forked.
+- [x] Local repository cloned.
+- [x] Working branch created.
+- [x] Project opened in Antigravity.
+- [x] Existing `.github/workflows` directory inspected.
+- [x] Missing `stale.yml` workflow verified.
+- [x] Current behavior documented.
+- [x] Expected behavior documented.
+- [x] Solution plan drafted.
+- [x] Validation strategy documented.
 
 ---
 
-## Blocker / Scope Finding
+## Phase III: Build
 
-The main blocker is that the reporter's expected behavior may conflict with existing `--txt-suffix` semantics in ExternalDNS.
+### Status
 
-Changing `AffixNameMapper.ToTXTName` to append the suffix to the full FQDN would likely require a broader design decision from maintainers and could break existing mapper tests and documented behavior.
+Phase III Complete — workflow implementation finished and pushed to my fork branch.
 
-Because of this, I paused production code changes instead of forcing a fix that might not match the project's intended behavior.
+### Implementation Notes
 
----
+I implemented the requested stale issue/PR cleanup workflow for Rafter CLI issue #35.
 
-## Mentor / Peer Feedback
+The implementation creates a new GitHub Actions workflow file:
 
-I asked for feedback in CodePath Slack. The feedback was that this issue may not be a good candidate to complete because:
+```text
+.github/workflows/stale.yml
+```
 
-1. The reporter's expected behavior appears to conflict with current mapper semantics.
-2. The behavior may involve DNS semantics beyond a small bug fix.
-3. The maintainer discussion suggests that this issue may no longer be intended for outside contribution.
+The workflow uses `actions/stale@v9` and runs on a daily schedule. It also includes `workflow_dispatch` so maintainers can run the workflow manually if needed.
 
-Based on this feedback, I decided to pivot away from ExternalDNS #5151 and switch to a backup issue.
+### Behavior Implemented
 
----
+- Issues with no activity for 60 days are labeled `stale`.
+- Stale issues with no activity for 14 more days are closed.
+- Pull requests with no activity for 30 days are labeled `stale`.
+- Pull requests are not automatically closed because the issue only requested stale labeling for PRs.
+- Issues and PRs labeled `pinned` or `security` are exempt.
+- The stale label is removed when new activity occurs.
 
-## Artifacts
+### Files Modified
+
+```text
+.github/workflows/stale.yml
+```
+
+### Code Changes
 
 | Item | Link |
 |---|---|
-| ExternalDNS issue | https://github.com/kubernetes-sigs/external-dns/issues/5151 |
-| Working branch | https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname |
-| Reproduction test commit | https://github.com/kietcoderlor/external-dns/tree/fix-5151-dotted-dnsname |
-| Contribution README | https://github.com/kietcoderlor/su26-ai301-contribution |
+| Branch | https://github.com/kietcoderlor/rafter-cli/tree/fix-35-stale-workflow |
+| Issue | https://github.com/RafterSecurity/rafter-cli/issues/35 |
+| Commit | https://github.com/Raftersecurity/rafter-cli/commit/7f095a7cfbbdb1b82f58d1373aa16142578c3306 |
 
----
+### Testing / Validation
 
-## What I Learned
+I validated the change by checking the workflow file and reviewing the diff.
 
-- How to trace a reported open-source bug into the relevant code path.
-- How to write a targeted regression test for a suspected behavior mismatch.
-- How to compare a reporter's expected behavior against existing tests and documentation.
-- How to recognize when an issue requires maintainer/product clarification instead of a quick code change.
-- How to make a responsible open-source decision to pivot when an issue is no longer a good fit.
+Commands run:
 
----
+```powershell
+cd D:\codepath\rafter-cli
+git status
+git diff --check
+git diff -- .github/workflows/stale.yml
+```
 
-## Next Steps
+### Validation Results
 
-1. Stop active work on ExternalDNS #5151.
-2. Select a backup issue for the remaining weeks.
-3. Start the new issue from Phase I / Phase II.
-4. Focus on an issue with clearer scope, clearer expected behavior, and a realistic path to a PR.
+- The new workflow file exists at `.github/workflows/stale.yml`.
+- The workflow uses `actions/stale@v9`.
+- The issue stale and close timing matches issue #35.
+- The PR stale timing matches issue #35.
+- PRs are not auto-closed because the issue did not explicitly request PR auto-close.
+- Exempt labels include `pinned` and `security`.
+- The stale label is removed when new activity occurs.
+- The change is limited to one workflow file.
 
-## Week 8 Status
+### Challenges Faced
 
-Week 8 progress submitted.
+The main challenge was deciding whether stale pull requests should also be automatically closed. The issue explicitly says that inactive PRs should be labeled stale after 30 days, but it does not clearly request PR auto-close behavior. To avoid adding extra behavior beyond the issue requirements, I configured PRs to be labeled stale but not automatically closed.
 
-- [x] ExternalDNS investigation documented.
-- [x] Blocker explained clearly.
-- [x] Mentor / peer feedback incorporated.
-- [x] Pivot decision documented.
-- [ ] Backup issue selected.
-- [ ] New issue Phase I / Phase II started.
+### Phase III Checklist
+
+- [x] Workflow file created.
+- [x] `actions/stale@v9` configured.
+- [x] Issue stale timing configured.
+- [x] Issue close timing configured.
+- [x] PR stale timing configured.
+- [x] PR auto-close intentionally disabled.
+- [x] Exempt labels configured.
+- [x] Diff reviewed.
+- [x] Branch pushed to fork.
+- [ ] PR will be opened in Phase IV.
