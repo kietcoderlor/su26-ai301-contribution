@@ -251,3 +251,71 @@ The main challenge was deciding whether stale pull requests should also be autom
 - [x] Diff reviewed.
 - [x] Branch pushed to fork.
 - [ ] PR will be opened in Phase IV.
+
+## Phase IV: Submit & Iterate
+
+### Status
+
+Phase IV Complete — pull request opened and awaiting maintainer review.
+
+### Pull Request
+
+**PR:** https://github.com/Raftersecurity/rafter-cli/pull/216  
+**Issue:** https://github.com/RafterSecurity/rafter-cli/issues/35  
+**Branch:** https://github.com/kietcoderlor/rafter-cli/tree/fix-35-stale-workflow  
+
+### PR Summary
+
+I opened a pull request to add a GitHub Actions stale issue/PR cleanup workflow for Rafter CLI issue #35.
+
+The PR adds a new workflow file:
+
+```text
+.github/workflows/stale.yml
+```
+
+The workflow uses `actions/stale@v9` and implements the stale policy described in the issue.
+
+### Changes Submitted
+
+- Added a scheduled stale cleanup workflow.
+- Added `workflow_dispatch` so maintainers can run the workflow manually.
+- Configured inactive issues to be marked `stale` after 60 days.
+- Configured stale issues to close after 14 additional days of inactivity.
+- Configured inactive pull requests to be marked `stale` after 30 days.
+- Disabled automatic PR closing because the issue only requested PR stale labeling.
+- Exempted issues and pull requests labeled `pinned` or `security`.
+- Enabled stale label removal when new activity occurs.
+
+### Validation Before PR
+
+Before opening the PR, I reviewed the diff and checked formatting.
+
+Commands run:
+
+```powershell
+cd D:\codepath\rafter-cli
+git status
+git diff --check
+npx -y prettier --check .github/workflows/stale.yml
+```
+
+### PR Status
+
+The PR is open and linked to issue #35 using `Closes #35`.
+
+### Maintainer Feedback Log
+
+| Date | Feedback | Response / Action |
+|---|---|---|
+| 2026-08-10 | PR opened and awaiting maintainer review. | I will monitor the PR and respond to any requested changes. |
+
+### Phase IV Checklist
+
+- [x] Branch pushed to fork.
+- [x] Pull request opened against upstream repository.
+- [x] PR description includes summary, validation, and issue link.
+- [x] Issue linked from PR.
+- [x] Contribution README updated with PR link and feedback log.
+- [ ] Maintainer feedback received.
+- [ ] Revisions pushed if requested.
